@@ -57,11 +57,18 @@ Source: public data from Taiwan's Government e-Procurement System (政府電子�
 
 ## Running your own
 
-`mcp_server.py` is a thin FastMCP wrapper over the ToBid API. Point `TOBID_API` at the public API if you want to self-host the wrapper:
+`mcp_server.py` is a thin FastMCP wrapper over the ToBid API. It speaks stdio by default (set `MCP_TRANSPORT=streamable-http` to serve HTTP instead):
 
 ```bash
 pip install "mcp<2" requests
-TOBID_API=https://api.tobid.tw MCP_HOST=127.0.0.1 MCP_PORT=8890 python mcp_server.py
+TOBID_API=https://api.tobid.tw python mcp_server.py
+```
+
+Or with Docker:
+
+```bash
+docker build -t tobid-mcp .
+docker run -i tobid-mcp
 ```
 
 ## License
