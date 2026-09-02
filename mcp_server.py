@@ -119,7 +119,7 @@ def get_tender(unit_id: str, job_number: str) -> dict:
 def price_analysis(unit_id: str, job_number: str) -> dict:
     """底價分析：這個案子大概會以多少錢成交。
     依歷史「決標／預算比」給三檔出價建議（保守／典型／積極），
-    比較基準依樣本充足度自動選：相似案（標題關鍵詞比對）＞同機關＞同類別＞全庫。
+    比較基準依樣本充足度自動選：相似案（標題關鍵詞比對）＞同機關＞同細類＞同大類＞全庫。
     適合在使用者問「這案該報多少」「值不值得投」時使用。"""
     d = _get("bargain", unit_id=unit_id, job_number=job_number)
     out = {"title": d.get("title"), "budget": d.get("budget"),
@@ -132,11 +132,14 @@ def price_analysis(unit_id: str, job_number: str) -> dict:
                                 "aggressive": imp.get("p25"),
                                 "note": "保守=競爭少時可試；積極=想搶下來要到這"}
     for key, label in (("sim_stats", "similar_cases"),
-                       ("unit_stats", "this_unit"), ("all_stats", "all_db")):
+                       ("unit_stats", "this_unit"), ("fine_stats", "this_category"),
+                       ("all_stats", "all_db")):
         s = d.get(key)
         if s:
             out[label] = {"median_pct": s.get("median"), "p25": s.get("p25"),
                           "p75": s.get("p75"), "n": s.get("n")}
+            if s.get("label"):
+                out[label]["category"] = s["label"]
     if d.get("award_amount"):
         out["actual_award"] = d["award_amount"]
     return out
