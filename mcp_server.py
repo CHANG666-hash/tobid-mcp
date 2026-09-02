@@ -272,4 +272,6 @@ def find_entity(q: str) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    # 預設 stdio（本地執行、Docker、Glama 檢查器都用這個）；
+    # 生產部署（pcc-mcp.service）以環境變數切成 streamable-http。
+    mcp.run(transport=os.environ.get("MCP_TRANSPORT", "stdio"))
