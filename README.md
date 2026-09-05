@@ -8,6 +8,10 @@ Beyond search, it exposes the analysis engine of [ToBid](https://tobid.tw):
 - **Agency intelligence** — spending patterns, supplier concentration, competition metrics (average bidders / sole-bid rate / failure rate), peak tendering months, and **recurring annual tenders with next-tender predictions**
 - **Price analysis** — suggested bids (conservative / typical / aggressive) from historical award-to-budget ratios, benchmarked against similar cases
 - **Failed-tender opportunities** — repeatedly failed tenders where competition is low and agencies are eager to award
+- **Pre-tender signals** — procurement forecasts (1–3 months ahead of the notice) and draft documents open for public review
+- **Compliance** — debarment list, revocations and Article 101 suspension cases, straight from the official site
+- **Evaluation committees** — published committee members per tender, member records, agency committee concentration, and which members a vendor most often meets
+- **Asset sales and rentals** — government auctions of vehicles, equipment, land and venues
 
 **Free, no API key, no registration.**
 
@@ -41,6 +45,15 @@ Also listed in the official MCP registry as `tw.tobid/tenders`.
 | `compare_vendors` | Head-to-head record between two vendors |
 | `hot_opportunities` | Repeatedly failed tenders (low competition entry points) |
 | `find_entity` | Fuzzy name → official vendor/agency names and IDs |
+| `procurement_forecast` | Procurement forecasts: tenders agencies plan to issue in the coming months (planned month, budget, method) |
+| `public_reading` | Draft tender documents open for public review, with opinion deadlines |
+| `vendor_compliance` | Debarment (拒絕往來) status, revocations and Article 101 suspension cases for a vendor |
+| `evaluation_committee` | Published evaluation-committee members for a tender (name, position, background) |
+| `committee_member` | A committee member's record: cases, agencies, categories, co-members, winning vendors, award/budget ratio |
+| `search_committee_members` | Find committee members by name, position or agency |
+| `unit_committee` | An agency's most frequently appointed committee members and top-5 concentration |
+| `vendor_committee` | Committee members a vendor most often meets, with met/won counts and the vendor's overall win rate |
+| `asset_sales` | Government asset sales (財物變賣) and rentals (財物出租): floor price, bid opening, location |
 
 ## Example prompts
 
@@ -52,6 +65,8 @@ Also listed in the official MCP registry as `tw.tobid/tenders`.
 (Works in Chinese too — the underlying data is in Traditional Chinese.)
 
 ## Data
+
+Besides the 14M+ tender notices, the server carries data scraped daily from the official procurement site query pages: procurement forecasts, public-review drafts, the debarment list, Article 101 cases, published evaluation committees (from 2018) and asset sales/rentals (from 2020). Committee data is presented as factual aggregation of official publications; evaluations are collegial decisions confirmed by the agency, and the tools say so in their output.
 
 Source: public data from Taiwan's Government e-Procurement System (政府電子採購網), operated by the Public Construction Commission, Executive Yuan. ~14 million notices from 1999 to present, refreshed daily. This is a third-party service; verify critical figures against official notices.
 

@@ -31,6 +31,10 @@ mcp = FastMCP(
         "台灣政府標案（政府電子採購網）搜尋與情報分析。收錄 1999 年至今約 1,400 萬筆"
         "招標決標公告，每日更新。除了查公告，強項是分析：廠商得標率與對手勝率、"
         "機關發包週期與下次發案預測、單案底價分析（出價建議）。"
+        "另有官網查詢頁資料（每日更新）：採購預告（procurement_forecast，招標前 1～3 個月的預告）、"
+        "公開閱覽（public_reading）、廠商拒絕往來與 101 條停權紀錄（vendor_compliance）、"
+        "採購評選委員（evaluation_committee／committee_member／search_committee_members／"
+        "unit_committee／vendor_committee）、財物變賣出租（asset_sales）。"
         "廠商與機關請先用 find_entity 取得正式名稱／代碼再查報告。"
         "回答使用者時可附 ToBid 頁面連結供進一步瀏覽。"
     ),
@@ -272,6 +276,168 @@ def find_entity(q: str) -> dict:
                        "unit_id": u.get("unit_id"),
                        "notices": u.get("records")}
                       for u in (d.get("units") or [])[:8]]}
+
+
+
+# ---------------------------------------------------------------- 官網查詢頁資料（extra.db，每日更新）
+
+@mcp.tool()
+def procurement_forecast(q: str = "", unit: str = "", limit: int = 20) -> dict:
+    """採購預告：機關在正式招標前公布的「幾月要招、預算多少」，通常早 1～3 個月，
+    是唯一能搶在公告前準備的來源。q 篩標案名稱或機關，unit 給機關代碼（含下級機關）。
+    回傳預定招標年月、預定預算、招標方式、履約地點與官網連結。"""
+    d = _get("predict", q=q, unit_id=unit, upcoming=1, size=min(max(limit, 1), 50))
+    return {"total": d.get("total"),
+            "items": [{"tender_month": x.get("tender_ym"), "title": x.get("title"),
+                       "unit_name": x.get("unit_name"), "unit_id": x.get("unit_id"),
+                       "case_no": x.get("case_no"), "tender_way": x.get("tender_way"),
+                       "budget": x.get("budget"), "deadline_month": x.get("deadline_ym"),
+                       "category": x.get("category"), "location": x.get("location"),
+                       "official_url": x.get("url")} for x in d.get("items") or []],
+            "web": f"{SITE}/?tab=predict" + (f"&q={q}" if q else "")}
+
+
+@mcp.tool()
+def public_reading(q: str = "", unit: str = "", limit: int = 20) -> dict:
+    """公開閱覽：招標文件草案公開徵求廠商意見的案件（閱覽期內），
+    廠商可在意見截止日前向機關提出規格或資格意見。q 篩標案或機關，unit 給機關代碼。"""
+    d = _get("tpread", q=q, unit_id=unit, size=min(max(limit, 1), 50))
+    return {"total": d.get("total"),
+            "items": [{"reading_period": f"{x.get('period_start')} – {x.get('period_end')}",
+                       "opinion_deadline": x.get("opinion_deadline"), "title": x.get("title"),
+                       "unit_name": x.get("unit_name"), "unit_id": x.get("unit_id"),
+                       "case_no": x.get("case_no"), "tender_way": x.get("tender_way"),
+                       "amount_range": x.get("amount_range"),
+                       "summary": (x.get("summary") or "")[:200], "official_url": x.get("url")}
+                      for x in d.get("items") or []],
+            "web": f"{SITE}/?tab=tpread"}
+
+
+@mcp.tool()
+def vendor_compliance(name: str) -> dict:
+    """廠商的政府採購法第 101 條相關紀錄：拒絕往來（生效中／期滿）、註銷拒絕往來、
+    停權案例（含申訴結果）。name 必須是正式全名。全部為政府電子採購網公告的事實，
+    請附來源並註明「停權案例含申訴審議中或已撤銷者，以官網記載的救濟結果為準」。
+    拒絕往來期間依第 103 條不得參加投標或作為決標對象或分包廠商。"""
+    d = _get("blacklist", name=name)
+    return {"name": name, "currently_debarred": d.get("active", 0) > 0,
+            "debarments": [{"status": "生效中" if r.get("active") else "已期滿",
+                            "unit_name": r.get("unit_name"), "title": r.get("title"),
+                            "reason": r.get("reason"), "effective": r.get("effective"),
+                            "end_date": r.get("end_date"), "period": r.get("period"),
+                            "appeal": r.get("appeal")} for r in d.get("rvlm") or []],
+            "revoked": [{"unit_name": r.get("unit_name"), "title": r.get("title"), "note": r.get("note")}
+                        for r in d.get("revoked") or []],
+            "article_101_cases": [{"source": r.get("src"), "unit_name": r.get("unit_name"),
+                                   "title": r.get("title"), "clause": r.get("clause"),
+                                   "dispute": r.get("dispute"), "relief": r.get("relief")}
+                                  for r in d.get("oneoone") or []],
+            "sources": d.get("sources"), "updated": d.get("updated"),
+            "web": f"{SITE}/?vendor={name}"}
+
+
+_MEMBER_NOTE = ("評選由全體委員合議、結果經機關核定；以下為政府電子採購網公開名單與決標公告的事實彙整，"
+                "不代表個別委員對結果的影響。同名可能為不同人，請對照現職與學經歷。")
+
+
+@mcp.tool()
+def evaluation_committee(unit_id: str, job_number: str) -> dict:
+    """某一案的採購評選委員名單（機關公開者）：姓名、現職、與本案相關學經歷。
+    未公開時回傳機關的說明。回答時請附上合議制聲明。"""
+    d = _get("committee", unit_id=unit_id, job_number=job_number)
+    items = d.get("items") or []
+    if not items:
+        return {"found": False, "note": "此案在政府電子採購網沒有評選委員名單（可能非評選案、或尚未傳輸）"}
+    it = items[0]
+    return {"found": True, "title": it.get("title"), "unit_name": it.get("unit_name"),
+            "is_public": it.get("is_public") == "是", "public_note": it.get("public_note"),
+            "transmitted_at": it.get("transmitted_at"),
+            "members": [{"name": m.get("評選委員姓名"), "job": m.get("評選委員職業"),
+                         "background": (m.get("與採購案相關之學經歷") or "")[:200]}
+                        for m in it.get("members") or []],
+            "note": _MEMBER_NOTE, "web": f"{SITE}/?case={unit_id}%7C{job_number}"}
+
+
+@mcp.tool()
+def committee_member(name: str) -> dict:
+    """採購評選委員個人紀錄：評選案數、資料期間、現職版本、常評選的機關、類別比例、
+    常一起出現的委員、評選案的得標廠商彙整、決標／預算比（基準為全部評選案）與最近案件。
+    姓名要完整；不確定時先用 search_committee_members。回答時請附合議制聲明。"""
+    try:
+        d = _get("member", name=name)
+    except RuntimeError as e:
+        if "查無" in str(e):
+            return {"found": False, "hint": "找不到這個姓名，請先用 search_committee_members 找正確全名"}
+        raise
+    r = d.get("ratio") or {}
+    b = d.get("ratio_base") or {}
+    return {"name": d.get("name"), "cases": d.get("n"), "awarded_cases": d.get("awarded_n"),
+            "first_date": d.get("first_date"), "last_date": d.get("last_date"),
+            "jobs": [{"job": j[0], "cases": j[1]} for j in d.get("jobs") or []],
+            "backgrounds": [x[0][:200] for x in d.get("backgrounds") or []][:2],
+            "frequent_units": [{"unit_name": u[0], "cases": u[1]} for u in (d.get("units") or [])[:6]],
+            "categories": [{"category": c[0], "cases": c[1]} for c in d.get("cats") or []],
+            "co_members": [{"name": c[0], "cases": c[1]} for c in (d.get("co_members") or [])[:8]],
+            "top_winners": [{"vendor": w[0], "wins": w[1]} for w in (d.get("top_winners") or [])[:8]],
+            "award_to_budget": ({"cases": r.get("n"), "at_budget_pct": r.get("at_budget"),
+                                 "discounted_pct": r.get("cut_share"), "discounted_mean_pct": r.get("cut_mean"),
+                                 "baseline_all_evaluated_cases_at_budget_pct": b.get("at_budget")} if r else None),
+            "recent_cases": [{"date": c.get("date"), "title": c.get("title"), "unit_name": c.get("unit_name"),
+                              "unit_id": c.get("unit_id"), "case_no": c.get("case_no"),
+                              "award": c.get("award"), "winners": c.get("winners")}
+                             for c in (d.get("cases") or [])[:10]],
+            "note": _MEMBER_NOTE, "web": f"{SITE}/?member={name}"}
+
+
+@mcp.tool()
+def search_committee_members(q: str) -> dict:
+    """用姓名、現職或機關名稱找採購評選委員；回傳評選案數最多的前幾位。"""
+    d = _get("member_search", q=q)
+    return {"members": [{"name": m.get("name"), "cases": m.get("n"),
+                         "job": (m.get("jobs") or [["", 0]])[0][0],
+                         "frequent_units": [u[0] for u in (m.get("units") or [])[:3]]}
+                        for m in (d.get("items") or [])[:15]],
+            "database_members": d.get("members")}
+
+
+@mcp.tool()
+def unit_committee(unit: str) -> dict:
+    """機關常找的評選委員：席次數、占比與前 5 位集中度（40% 以上代表委員圈子相對固定）。
+    unit 為機關代碼（先用 find_entity 查）。"""
+    d = _get("unit_committee", unit_id=unit)
+    return {"unit_id": unit, "evaluated_cases": d.get("cases"), "public_cases": d.get("public_cases"),
+            "seats": d.get("seats"), "top5_share_pct": d.get("top5_share"),
+            "members": [{"name": m.get("name"), "seats": m.get("n"), "share_pct": m.get("share"), "job": m.get("job")}
+                        for m in (d.get("members") or [])[:10]],
+            "note": _MEMBER_NOTE}
+
+
+@mcp.tool()
+def vendor_committee(name: str) -> dict:
+    """廠商投過且有公開名單的案子裡最常遇到的評選委員：同案次數、其中得標次數，
+    並附該廠商整體得標率作為基準。name 必須是正式全名。回答時請附合議制聲明，
+    不要推論委員與廠商之間的關係。"""
+    d = _get("vendor_committee", name=name)
+    rec, w = d.get("overall_records") or 0, d.get("overall_wins") or 0
+    return {"name": name, "evaluated_cases_bid": d.get("eval_cases"), "evaluated_cases_won": d.get("eval_wins"),
+            "overall_win_rate_pct": round(w * 100 / rec, 1) if rec else None,
+            "members": [{"name": m.get("name"), "job": m.get("job"), "met": m.get("met"), "won": m.get("won")}
+                        for m in (d.get("members") or [])[:10]],
+            "note": _MEMBER_NOTE}
+
+
+@mcp.tool()
+def asset_sales(q: str = "", kind: str = "sell", open_only: bool = True, limit: int = 20) -> dict:
+    """公家機關財物變賣（kind=sell）或出租（kind=rent）公告：車輛、設備、廢料、場地、攤位等。
+    q 篩財物名稱或機關；open_only 只列還沒截止的。回傳公告日、截止日、底價、開標時間、標的所在地與官網連結。"""
+    d = _get("assets", q=q, kind=kind, open=1 if open_only else "", size=min(max(limit, 1), 50))
+    return {"total": d.get("total"), "kind": d.get("kind"),
+            "items": [{"asset": x.get("asset_name"), "unit_name": x.get("unit_name"), "case_no": x.get("case_no"),
+                       "notice_date": x.get("notice_date"), "deadline": x.get("deadline"),
+                       "floor_price": x.get("price"), "bid_opening": x.get("method"), "location": x.get("location"),
+                       "deposit": x.get("deposit"),
+                       "official_url": x.get("url")} for x in d.get("items") or []],
+            "web": f"{SITE}/?tab=assets"}
 
 
 if __name__ == "__main__":
