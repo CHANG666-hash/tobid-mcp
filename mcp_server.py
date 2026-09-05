@@ -70,7 +70,7 @@ def _row(r):
 
 @mcp.tool()
 def search_tenders(q: str = "", kind: str = "", region: str = "",
-                   year: int = 0, unit_id: str = "", vendor: str = "",
+                   year: int = 0, unit_id: str = "", unit_name: str = "", vendor: str = "",
                    budget_min: int = 0, budget_max: int = 0,
                    page: int = 1) -> dict:
     """搜尋政府標案公告。
@@ -81,12 +81,13 @@ def search_tenders(q: str = "", kind: str = "", region: str = "",
     year: 西元年（例 2026）。
     unit_id: 機關代碼（用 find_entity 取得）——查「某機關發的案」用這個，
              比 q 精確（q 是全文比對）。
+    unit_name: 機關名稱片段（例「臺中市政府」，含所屬機關）；沒有代碼時用這個。
     vendor: 廠商名稱（正式全名）——查該廠商投標／得標過的案。
     budget_min/budget_max: 預算金額範圍（新台幣元）。
     回傳最新 10 筆與總數；需要更多用 page 翻頁。
     """
     d = _get("search", q=q, kind=kind, region=region,
-             year=year or None, unit_id=unit_id, vendor=vendor,
+             year=year or None, unit_id=unit_id, unit=unit_name, vendor=vendor,
              budget_min=budget_min or None, budget_max=budget_max or None,
              page=page, size=10, lite=1, sort="date")
     return {"total": d.get("total"), "page": page,
@@ -100,6 +101,8 @@ def get_tender(unit_id: str, job_number: str) -> dict:
     得標廠商、競爭態勢（幾家投標／是否單一投標）、是否為續約案。
     unit_id 與 job_number 來自 search_tenders 的結果列。"""
     d = _get("case", unit_id=unit_id, job_number=job_number)
+    if not d.get("events"):
+        return {"found": False, "hint": "索引中沒有這個機關代碼＋案號的公告，請用 search_tenders 的結果列取得正確的 unit_id 與 job_number"}
     events = [{"date": e.get("date"), "type": e.get("type")}
               for e in (d.get("events") or [])][:15]
     out = {"title": d.get("title"), "unit_name": d.get("unit_name"),

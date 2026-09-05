@@ -37,7 +37,7 @@ Also listed in the official MCP registry as `tw.tobid/tenders`.
 
 | Tool | Description |
 |---|---|
-| `search_tenders` | Full-text tender search with filters (region, year, budget range, agency, vendor) |
+| `search_tenders` | Full-text tender search with filters (region, year, budget range, agency by ID or name, vendor) |
 | `get_tender` | Single tender timeline: notices, amounts, winners, competition status |
 | `price_analysis` | Suggested bid range from historical award/budget ratios |
 | `vendor_report` | Vendor intelligence: win rate, totals, top clients, rivals, recent losses |
